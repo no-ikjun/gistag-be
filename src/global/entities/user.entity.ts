@@ -1,4 +1,11 @@
-import { Entity, PrimaryGeneratedColumn, BaseEntity, Column } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  BaseEntity,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 import { ProviderType } from '../enums/user.enum';
 
 @Entity('users')
@@ -21,9 +28,9 @@ export class UserEntity extends BaseEntity {
   @Column()
   profile_image_url: string;
 
-  @Column({ default: () => 'CURRENT_TIMESTAMP' })
+  @CreateDateColumn()
   created_at: Date;
 
-  @Column({ default: () => 'CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP' })
+  @UpdateDateColumn()
   updated_at: Date;
 }
