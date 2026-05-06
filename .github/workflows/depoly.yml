@@ -1,0 +1,142 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '22'
+  IMAGE_NAME: gistag-be
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: yarn
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Lint
+        run: yarn lint -- --no-fix --max-warnings 0
+
+      - name: Test
+        run: yarn test --ci
+
+      - name: Build (Nest)
+        run: yarn build
+
+  docker:
+    needs: ci
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ secrets.DOCKER_USERNAME != '' && format('{0}/{1}', secrets.DOCKER_USERNAME, env.IMAGE_NAME) || format('ci-local/{0}', env.IMAGE_NAME) }}
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' && github.event_name == 'push' }}
+            type=sha,prefix=,format=short
+
+      - name: Log in to Docker Hub
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: docker
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.LIGHTSAIL_HOST }}
+          username: ${{ secrets.LIGHTSAIL_USERNAME }}
+          key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          script: |
+            set -Eeuo pipefail
+
+            APP_NAME="${{ env.IMAGE_NAME }}"
+            IMAGE="${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:latest"
+            ENV_PATH="/home/ubuntu/.env"
+            HOST_PORT="3000"
+            CONTAINER_PORT="3000"
+
+            echo "[1/4] Stop and remove existing container"
+            if docker ps -aq -f "name=^${APP_NAME}$" | grep -q .; then
+              docker rm -f "$(docker ps -aq -f "name=^${APP_NAME}$")"
+            fi
+
+            echo "[2/4] Write .env"
+            umask 077
+            cat > "${ENV_PATH}" <<'EOF'
+            ${{ secrets.ENV_FILE }}
+            EOF
+            chmod 600 "${ENV_PATH}"
+
+            echo "[3/4] Pull and run"
+            docker pull "${IMAGE}"
+            docker run -d --name "${APP_NAME}" \
+              -p "${HOST_PORT}:${CONTAINER_PORT}" \
+              --env-file "${ENV_PATH}" \
+              --restart always \
+              --health-cmd='wget -q -O /dev/null http://127.0.0.1:3000/ || exit 1' \
+              --health-interval=10s --health-retries=5 --health-timeout=3s --health-start-period=15s \
+              "${IMAGE}"
+
+            echo "[4/4] Wait for healthy"
+            ok=0
+            for i in $(seq 1 30); do
+              status="$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "${APP_NAME}" 2>/dev/null || echo starting)"
+              echo "  try ${i}: ${status}"
+              if [ "${status}" = "healthy" ]; then
+                ok=1
+                break
+              fi
+              sleep 2
+            done
+            if [ "${ok}" -ne 1 ]; then
+              echo "Health check did not pass in time"
+              docker logs "${APP_NAME}" --tail 80 || true
+              exit 1
+            fi
+
+            docker ps --filter "name=^${APP_NAME}$" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
