@@ -38,7 +38,7 @@ jobs:
         run: yarn lint:check
 
       - name: Test
-        run: yarn test --ci
+        run: yarn test:ci
 
       - name: Build (Nest)
         run: yarn build
