@@ -97,7 +97,7 @@ jobs:
             APP_NAME="${{ env.IMAGE_NAME }}"
             IMAGE="${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:latest"
             ENV_PATH="/home/ubuntu/.env"
-            HOST_PORT="3000"
+            HOST_PORT="3001"
             CONTAINER_PORT="3000"
 
             echo "[1/4] Stop and remove existing container"
@@ -115,7 +115,7 @@ jobs:
             echo "[3/4] Pull and run"
             docker pull "${IMAGE}"
             docker run -d --name "${APP_NAME}" \
-              -p "${HOST_PORT}:${CONTAINER_PORT}" \
+              -p "127.0.0.1:${HOST_PORT}:${CONTAINER_PORT}" \
               --env-file "${ENV_PATH}" \
               --restart always \
               --health-cmd='wget -q -O /dev/null http://127.0.0.1:3000/ || exit 1' \
