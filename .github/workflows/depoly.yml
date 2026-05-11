@@ -17,6 +17,7 @@ permissions:
 env:
   NODE_VERSION: '22'
   IMAGE_NAME: gistag-be
+  COMPOSE_REMOTE_DIR: /home/ubuntu/gistag-be
 
 jobs:
   ci:
@@ -84,6 +85,28 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Ensure remote deploy directory
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.LIGHTSAIL_HOST }}
+          username: ${{ secrets.LIGHTSAIL_USERNAME }}
+          key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          script: mkdir -p ${{ env.COMPOSE_REMOTE_DIR }}
+
+      - name: Copy docker-compose.yml
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.LIGHTSAIL_HOST }}
+          username: ${{ secrets.LIGHTSAIL_USERNAME }}
+          key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          source: 'docker-compose.yml'
+          target: ${{ env.COMPOSE_REMOTE_DIR }}/
+
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.2.2
         with:
@@ -97,38 +120,57 @@ jobs:
             APP_NAME="${{ env.IMAGE_NAME }}"
             IMAGE="${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:latest"
             ENV_PATH="/home/ubuntu/.env"
+            COMPOSE_DIR="${{ env.COMPOSE_REMOTE_DIR }}"
+            COMPOSE_FILE="${COMPOSE_DIR}/docker-compose.yml"
             HOST_PORT="3001"
             CONTAINER_PORT="3000"
             DOCKER_NETWORK="gistag-net"
 
-            echo "[1/5] Write .env"
+            echo "[1/7] Write .env"
             umask 077
             cat > "${ENV_PATH}" <<'EOF'
             ${{ secrets.ENV_FILE }}
             EOF
             chmod 600 "${ENV_PATH}"
 
-            echo "[2/5] Pull image"
-            docker pull "${IMAGE}"
+            echo "[2/7] Postgres (Docker Compose, network ${DOCKER_NETWORK})"
+            docker compose -f "${COMPOSE_FILE}" --env-file "${ENV_PATH}" up -d postgres
 
-            if ! docker network inspect "${DOCKER_NETWORK}" >/dev/null 2>&1; then
-              echo "Docker network '${DOCKER_NETWORK}' not found. On the server, update docker-compose.yml (gistag-net), then: docker compose up -d postgres"
+            echo "[3/7] Wait for Postgres (host: postgres on ${DOCKER_NETWORK})"
+            ok=0
+            for i in $(seq 1 60); do
+              if docker run --rm --network "${DOCKER_NETWORK}" --env-file "${ENV_PATH}" \
+                postgres:16-alpine \
+                sh -c 'pg_isready -h postgres -p 5432 -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-postgres}"' \
+                >/dev/null 2>&1; then
+                ok=1
+                break
+              fi
+              echo "  waiting for postgres (${i}/60)..."
+              sleep 2
+            done
+            if [ "${ok}" -ne 1 ]; then
+              echo "Postgres did not become ready in time."
+              docker compose -f "${COMPOSE_FILE}" --env-file "${ENV_PATH}" logs postgres --tail 80 || true
               exit 1
             fi
 
-            echo "[3/5] Database migrations (one-shot container, same network as compose postgres)"
+            echo "[4/7] Pull app image"
+            docker pull "${IMAGE}"
+
+            echo "[5/7] Database migrations (one-shot)"
             docker run --rm \
               --network "${DOCKER_NETWORK}" \
               --env-file "${ENV_PATH}" \
               "${IMAGE}" \
               yarn db:migrate
 
-            echo "[4/5] Stop and remove existing container"
+            echo "[6/7] Stop and remove existing app container"
             if docker ps -aq -f "name=^${APP_NAME}$" | grep -q .; then
               docker rm -f "$(docker ps -aq -f "name=^${APP_NAME}$")"
             fi
 
-            echo "[5/5] Run new container"
+            echo "[7/7] Run app container"
             docker run -d --name "${APP_NAME}" \
               --network "${DOCKER_NETWORK}" \
               -p "127.0.0.1:${HOST_PORT}:${CONTAINER_PORT}" \
