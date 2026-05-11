@@ -1,6 +1,13 @@
+# 배포 시 마이그레이션/앱 컨테이너가 DB에 붙으려면 동일 네트워크 이름(gistag-net)을 쓰세요.
+networks:
+  gistag:
+    name: gistag-net
+
 services:
   postgres:
     image: postgres:16-alpine
+    networks:
+      - gistag
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-gistag}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gistag}
@@ -17,6 +24,8 @@ services:
 
   api:
     build: .
+    networks:
+      - gistag
     ports:
       - '3000:3000'
     environment:
