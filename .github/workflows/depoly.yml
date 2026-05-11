@@ -99,6 +99,7 @@ jobs:
             ENV_PATH="/home/ubuntu/.env"
             HOST_PORT="3001"
             CONTAINER_PORT="3000"
+            DOCKER_NETWORK="gistag-net"
 
             echo "[1/5] Write .env"
             umask 077
@@ -110,8 +111,14 @@ jobs:
             echo "[2/5] Pull image"
             docker pull "${IMAGE}"
 
-            echo "[3/5] Database migrations (one-shot container)"
+            if ! docker network inspect "${DOCKER_NETWORK}" >/dev/null 2>&1; then
+              echo "Docker network '${DOCKER_NETWORK}' not found. On the server, update docker-compose.yml (gistag-net), then: docker compose up -d postgres"
+              exit 1
+            fi
+
+            echo "[3/5] Database migrations (one-shot container, same network as compose postgres)"
             docker run --rm \
+              --network "${DOCKER_NETWORK}" \
               --env-file "${ENV_PATH}" \
               "${IMAGE}" \
               yarn db:migrate
@@ -123,6 +130,7 @@ jobs:
 
             echo "[5/5] Run new container"
             docker run -d --name "${APP_NAME}" \
+              --network "${DOCKER_NETWORK}" \
               -p "127.0.0.1:${HOST_PORT}:${CONTAINER_PORT}" \
               --env-file "${ENV_PATH}" \
               --restart always \
