@@ -3,15 +3,15 @@ import { and, eq } from 'drizzle-orm';
 import type { AppDatabase } from '../db';
 import { DRIZZLE } from '../db/database.constants';
 import { nfcTags, places } from '../db/schema';
-import { PlaceResponseDto } from '../places/dto/place-response.dto';
 import { toPlaceResponse } from '../places/place.mapper';
 import { NfcVerifyDto } from './dto/nfc-verify.dto';
+import { NfcVerifyResponseDto } from './dto/nfc-verify-response.dto';
 
 @Injectable()
 export class NfcService {
   constructor(@Inject(DRIZZLE) private readonly db: AppDatabase) {}
 
-  async verify(dto: NfcVerifyDto): Promise<{ place: PlaceResponseDto }> {
+  async verify(dto: NfcVerifyDto): Promise<NfcVerifyResponseDto> {
     const rows = await this.db
       .select({ place: places })
       .from(nfcTags)
@@ -24,6 +24,8 @@ export class NfcService {
       throw new NotFoundException('Unknown or inactive NFC tag');
     }
 
-    return { place: toPlaceResponse(row.place) };
+    const res = new NfcVerifyResponseDto();
+    res.place = toPlaceResponse(row.place);
+    return res;
   }
 }
