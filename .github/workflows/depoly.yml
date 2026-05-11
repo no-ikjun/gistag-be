@@ -100,20 +100,28 @@ jobs:
             HOST_PORT="3001"
             CONTAINER_PORT="3000"
 
-            echo "[1/4] Stop and remove existing container"
-            if docker ps -aq -f "name=^${APP_NAME}$" | grep -q .; then
-              docker rm -f "$(docker ps -aq -f "name=^${APP_NAME}$")"
-            fi
-
-            echo "[2/4] Write .env"
+            echo "[1/5] Write .env"
             umask 077
             cat > "${ENV_PATH}" <<'EOF'
             ${{ secrets.ENV_FILE }}
             EOF
             chmod 600 "${ENV_PATH}"
 
-            echo "[3/4] Pull and run"
+            echo "[2/5] Pull image"
             docker pull "${IMAGE}"
+
+            echo "[3/5] Database migrations (one-shot container)"
+            docker run --rm \
+              --env-file "${ENV_PATH}" \
+              "${IMAGE}" \
+              yarn db:migrate
+
+            echo "[4/5] Stop and remove existing container"
+            if docker ps -aq -f "name=^${APP_NAME}$" | grep -q .; then
+              docker rm -f "$(docker ps -aq -f "name=^${APP_NAME}$")"
+            fi
+
+            echo "[5/5] Run new container"
             docker run -d --name "${APP_NAME}" \
               -p "127.0.0.1:${HOST_PORT}:${CONTAINER_PORT}" \
               --env-file "${ENV_PATH}" \
@@ -122,7 +130,7 @@ jobs:
               --health-interval=10s --health-retries=5 --health-timeout=3s --health-start-period=15s \
               "${IMAGE}"
 
-            echo "[4/4] Wait for healthy"
+            echo "[health] Wait for healthy"
             ok=0
             for i in $(seq 1 30); do
               status="$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "${APP_NAME}" 2>/dev/null || echo starting)"
