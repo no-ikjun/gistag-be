@@ -14,5 +14,6 @@ COPY package.json yarn.lock ./
 RUN yarn install --production --frozen-lockfile && yarn cache clean
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/drizzle ./drizzle
+COPY drizzle.migrate.config.ts ./
 EXPOSE 3000
 CMD ["node", "dist/src/main.js"]
