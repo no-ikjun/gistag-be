@@ -107,6 +107,24 @@ jobs:
           source: 'docker-compose.yml'
           target: ${{ env.COMPOSE_REMOTE_DIR }}/
 
+      # SSH heredoc 으로 .env 를 쓰면 스크립트 들여쓰기가 각 줄 앞에 붙어 POSTGRES_* / DATABASE_URL 이 깨짐
+      - name: Write .env on runner (no leading spaces)
+        env:
+          ENV_FILE_CONTENT: ${{ secrets.ENV_FILE }}
+        run: |
+          printf '%s\n' "$ENV_FILE_CONTENT" > deploy.env
+          test -s deploy.env
+
+      - name: Copy .env to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.LIGHTSAIL_HOST }}
+          username: ${{ secrets.LIGHTSAIL_USERNAME }}
+          key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          source: deploy.env
+          target: /home/ubuntu/
+
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.2.2
         with:
@@ -122,26 +140,25 @@ jobs:
             ENV_PATH="/home/ubuntu/.env"
             COMPOSE_DIR="${{ env.COMPOSE_REMOTE_DIR }}"
             COMPOSE_FILE="${COMPOSE_DIR}/docker-compose.yml"
+            COMPOSE_PROJECT="gistag"
             HOST_PORT="3001"
             CONTAINER_PORT="3000"
             DOCKER_NETWORK="gistag-net"
 
-            echo "[1/7] Write .env"
+            echo "[1/7] Install .env (from CI, no heredoc corruption)"
             umask 077
-            cat > "${ENV_PATH}" <<'EOF'
-            ${{ secrets.ENV_FILE }}
-            EOF
+            mv -f /home/ubuntu/deploy.env "${ENV_PATH}"
             chmod 600 "${ENV_PATH}"
 
-            echo "[2/7] Postgres (Docker Compose, network ${DOCKER_NETWORK})"
-            docker compose -f "${COMPOSE_FILE}" --env-file "${ENV_PATH}" up -d postgres
+            echo "[2/7] Postgres (compose project ${COMPOSE_PROJECT}, network ${DOCKER_NETWORK})"
+            docker compose -p "${COMPOSE_PROJECT}" -f "${COMPOSE_FILE}" --env-file "${ENV_PATH}" up -d postgres
 
-            echo "[3/7] Wait for Postgres (host: postgres on ${DOCKER_NETWORK})"
+            echo "[3/7] Wait for Postgres (DNS: postgres)"
             ok=0
             for i in $(seq 1 60); do
               if docker run --rm --network "${DOCKER_NETWORK}" --env-file "${ENV_PATH}" \
                 postgres:16-alpine \
-                sh -c 'pg_isready -h postgres -p 5432 -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-postgres}"' \
+                sh -c 'pg_isready -h postgres -p 5432 -U "${POSTGRES_USER:-gistag}" -d "${POSTGRES_DB:-gistag}"' \
                 >/dev/null 2>&1; then
                 ok=1
                 break
@@ -150,8 +167,11 @@ jobs:
               sleep 2
             done
             if [ "${ok}" -ne 1 ]; then
-              echo "Postgres did not become ready in time."
-              docker compose -f "${COMPOSE_FILE}" --env-file "${ENV_PATH}" logs postgres --tail 80 || true
+              echo "Postgres did not become ready in time. Last pg_isready:"
+              docker run --rm --network "${DOCKER_NETWORK}" --env-file "${ENV_PATH}" \
+                postgres:16-alpine \
+                sh -c 'pg_isready -h postgres -p 5432 -U "${POSTGRES_USER:-gistag}" -d "${POSTGRES_DB:-gistag}"' || true
+              docker compose -p "${COMPOSE_PROJECT}" -f "${COMPOSE_FILE}" --env-file "${ENV_PATH}" logs postgres --tail 80 || true
               exit 1
             fi
 
