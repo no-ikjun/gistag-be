@@ -36,5 +36,19 @@ INSERT INTO "places" (
     true
   );
 
-INSERT INTO "nfc_tags" ("tag_uid", "place_id", "is_active")
-VALUES ('DEMO-NFC-UID-001', 1, true);
+INSERT INTO "nfc_tags" (
+  "tag_code",
+  "place_id",
+  "status",
+  "ndef_payload",
+  "ndef_type",
+  "activated_at"
+)
+VALUES (
+  'GISTAG_TAG_DEMO_001',
+  1,
+  'ACTIVE',
+  'gistag://tag/GISTAG_TAG_DEMO_001',
+  'URI',
+  now()
+);
