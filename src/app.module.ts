@@ -6,6 +6,9 @@ import { AppService } from './app.service';
 import { DatabaseModule } from './db/database.module';
 import { NfcModule } from './nfc/nfc.module';
 import { PlacesModule } from './places/places.module';
+import { TagsModule } from './tags/tags.module';
+import { WorkoutRecordsModule } from './workout-records/workout-records.module';
+import { WorkoutSessionsModule } from './workout-sessions/workout-sessions.module';
 
 @Module({
   imports: [
@@ -14,6 +17,9 @@ import { PlacesModule } from './places/places.module';
     AuthModule,
     PlacesModule,
     NfcModule,
+    TagsModule,
+    WorkoutRecordsModule,
+    WorkoutSessionsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
