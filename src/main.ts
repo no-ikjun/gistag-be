@@ -17,6 +17,10 @@ async function bootstrap() {
     .setTitle('Gistag API')
     .setDescription('Gistag backend REST API')
     .setVersion('1.0')
+    .addBearerAuth(
+      { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+      'access-token',
+    )
     .build();
   const document = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('docs', app, document);
