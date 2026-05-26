@@ -1,8 +1,9 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, eq, isNotNull } from 'drizzle-orm';
 import type { AppDatabase } from '../db';
 import { DRIZZLE } from '../db/database.constants';
 import { places } from '../db/schema';
+import { NearbyQueryDto } from './dto/nearby-query.dto';
 import { RecommendedQueryDto } from './dto/recommended-query.dto';
 import { PlaceResponseDto } from './dto/place-response.dto';
 import { toPlaceResponse } from './place.mapper';
@@ -32,6 +33,35 @@ function haversineKm(
 @Injectable()
 export class PlacesService {
   constructor(@Inject(DRIZZLE) private readonly db: AppDatabase) {}
+
+  async findNearby(query: NearbyQueryDto): Promise<PlaceResponseDto[]> {
+    const rows = await this.db
+      .select()
+      .from(places)
+      .where(and(isNotNull(places.latitude), isNotNull(places.longitude)));
+
+    return rows
+      .map((row) => ({
+        row,
+        distanceKm: haversineKm(
+          query.lat,
+          query.lng,
+          row.latitude!,
+          row.longitude!,
+        ),
+      }))
+      .filter(({ distanceKm }) => distanceKm <= query.radius)
+      .sort((a, b) => {
+        if (a.distanceKm !== b.distanceKm) {
+          return a.distanceKm - b.distanceKm;
+        }
+        if (a.row.sortOrder !== b.row.sortOrder) {
+          return a.row.sortOrder - b.row.sortOrder;
+        }
+        return a.row.id - b.row.id;
+      })
+      .map(({ row, distanceKm }) => toPlaceResponse(row, { distanceKm }));
+  }
 
   async findRecommended(
     query: RecommendedQueryDto,
