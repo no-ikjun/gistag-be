@@ -28,6 +28,18 @@ export const workoutSessionStatusEnum = pgEnum('workout_session_status', [
   'FINISHED',
   'CANCELLED',
 ]);
+export const genderEnum = pgEnum('gender', [
+  'male',
+  'female',
+  'other',
+  'undisclosed',
+]);
+export const exerciseFrequencyEnum = pgEnum('exercise_frequency', [
+  'daily',
+  '3_4_per_week',
+  '1_2_per_week',
+  'rarely',
+]);
 
 export const users = pgTable(
   'users',
@@ -182,11 +194,30 @@ export const userStats = pgTable('user_stats', {
     .defaultNow(),
 });
 
-export const usersRelations = relations(users, ({ many }) => ({
+export const userProfiles = pgTable('user_profiles', {
+  userId: uuid('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  gender: genderEnum('gender').notNull(),
+  exerciseTypes: text('exercise_types').array().notNull(),
+  exerciseFrequency: exerciseFrequencyEnum('exercise_frequency').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const usersRelations = relations(users, ({ many, one }) => ({
   refreshTokens: many(refreshTokens),
   nfcTags: many(nfcTags),
   workoutSessions: many(workoutSessions),
   workoutRecords: many(workoutRecords),
+  profile: one(userProfiles, {
+    fields: [users.id],
+    references: [userProfiles.userId],
+  }),
 }));
 
 export const refreshTokensRelations = relations(refreshTokens, ({ one }) => ({
@@ -253,10 +284,19 @@ export const userStatsRelations = relations(userStats, ({ one }) => ({
   }),
 }));
 
+export const userProfilesRelations = relations(userProfiles, ({ one }) => ({
+  user: one(users, {
+    fields: [userProfiles.userId],
+    references: [users.id],
+  }),
+}));
+
 export const schema = {
   providerTypeEnum,
   tagStatusEnum,
   workoutSessionStatusEnum,
+  genderEnum,
+  exerciseFrequencyEnum,
   users,
   refreshTokens,
   places,
@@ -264,6 +304,7 @@ export const schema = {
   workoutSessions,
   workoutRecords,
   userStats,
+  userProfiles,
   usersRelations,
   refreshTokensRelations,
   placesRelations,
@@ -271,4 +312,5 @@ export const schema = {
   workoutSessionsRelations,
   workoutRecordsRelations,
   userStatsRelations,
+  userProfilesRelations,
 };
