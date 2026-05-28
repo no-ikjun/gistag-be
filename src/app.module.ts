@@ -7,6 +7,7 @@ import { DatabaseModule } from './db/database.module';
 import { NfcModule } from './nfc/nfc.module';
 import { PlacesModule } from './places/places.module';
 import { TagsModule } from './tags/tags.module';
+import { UsersModule } from './users/users.module';
 import { WorkoutRecordsModule } from './workout-records/workout-records.module';
 import { WorkoutSessionsModule } from './workout-sessions/workout-sessions.module';
 
@@ -18,6 +19,7 @@ import { WorkoutSessionsModule } from './workout-sessions/workout-sessions.modul
     PlacesModule,
     NfcModule,
     TagsModule,
+    UsersModule,
     WorkoutRecordsModule,
     WorkoutSessionsModule,
   ],
