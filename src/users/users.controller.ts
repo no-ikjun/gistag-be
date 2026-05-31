@@ -13,6 +13,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { SubmitOnboardingDto } from './dto/submit-onboarding.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UserProfileResponseDto } from './dto/user-profile-response.dto';
+import { UserStatsResponseDto } from './dto/user-stats-response.dto';
 import { UsersService } from './users.service';
 
 @ApiTags('users')
@@ -49,5 +50,12 @@ export class UsersController {
     @Body() body: UpdateProfileDto,
   ): Promise<UserProfileResponseDto> {
     return this.usersService.updateProfile(userId, body);
+  }
+
+  @Get('me/stats')
+  @ApiOperation({ summary: '내 누적 스탯 조회 (level / XP / streak)' })
+  @ApiOkResponse({ type: UserStatsResponseDto })
+  getStats(@CurrentUserId() userId: string): Promise<UserStatsResponseDto> {
+    return this.usersService.getStats(userId);
   }
 }

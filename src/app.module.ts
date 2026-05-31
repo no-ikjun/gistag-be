@@ -6,6 +6,7 @@ import { AppService } from './app.service';
 import { DatabaseModule } from './db/database.module';
 import { NfcModule } from './nfc/nfc.module';
 import { PlacesModule } from './places/places.module';
+import { RankingsModule } from './rankings/rankings.module';
 import { TagsModule } from './tags/tags.module';
 import { UsersModule } from './users/users.module';
 import { WorkoutRecordsModule } from './workout-records/workout-records.module';
@@ -20,6 +21,7 @@ import { WorkoutSessionsModule } from './workout-sessions/workout-sessions.modul
     NfcModule,
     TagsModule,
     UsersModule,
+    RankingsModule,
     WorkoutRecordsModule,
     WorkoutSessionsModule,
   ],

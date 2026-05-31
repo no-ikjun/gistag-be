@@ -5,16 +5,21 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, ne } from 'drizzle-orm';
 import type { AppDatabase } from '../db';
 import { DRIZZLE } from '../db/database.constants';
 import {
   nfcTags,
   places,
   userStats,
+  users,
   workoutRecords,
   workoutSessions,
 } from '../db/schema';
+import {
+  ActivePeerItemDto,
+  ActivePeersResponseDto,
+} from './dto/active-peers-response.dto';
 import { CancelWorkoutSessionDto } from './dto/cancel-workout-session.dto';
 import { FinishWorkoutSessionDto } from './dto/finish-workout-session.dto';
 import { FinishWorkoutSessionResponseDto } from './dto/finish-workout-session-response.dto';
@@ -27,6 +32,7 @@ import {
   toFinishedWorkoutRecordDto,
   toWorkoutRewardDto,
   toWorkoutSessionDto,
+  toWorkoutSessionPlaceDto,
 } from './workout-sessions.mapper';
 
 const MINIMUM_DURATION_SECONDS = 60;
@@ -58,6 +64,66 @@ export class WorkoutSessionsService {
     res.session = row
       ? toWorkoutSessionDto(row.session, row.place, row.tag)
       : null;
+    return res;
+  }
+
+  async getActivePeers(userId: string): Promise<ActivePeersResponseDto> {
+    const myRows = await this.db
+      .select({ session: workoutSessions, place: places })
+      .from(workoutSessions)
+      .innerJoin(places, eq(workoutSessions.placeId, places.id))
+      .where(
+        and(
+          eq(workoutSessions.userId, userId),
+          eq(workoutSessions.status, 'ACTIVE'),
+        ),
+      )
+      .orderBy(desc(workoutSessions.startedAt))
+      .limit(1);
+
+    const res = new ActivePeersResponseDto();
+    const myRow = myRows[0];
+    if (!myRow) {
+      res.place = null;
+      res.items = [];
+      return res;
+    }
+
+    res.place = toWorkoutSessionPlaceDto(myRow.place);
+
+    const now = new Date();
+    const peerRows = await this.db
+      .select({
+        session: workoutSessions,
+        user: users,
+        stats: userStats,
+      })
+      .from(workoutSessions)
+      .innerJoin(users, eq(users.id, workoutSessions.userId))
+      .leftJoin(userStats, eq(userStats.userId, workoutSessions.userId))
+      .where(
+        and(
+          eq(workoutSessions.placeId, myRow.session.placeId),
+          eq(workoutSessions.status, 'ACTIVE'),
+          ne(workoutSessions.userId, userId),
+        ),
+      )
+      .orderBy(asc(workoutSessions.startedAt));
+
+    res.items = peerRows.map(({ session, user, stats }) => {
+      const item = new ActivePeerItemDto();
+      item.userId = user.id;
+      item.nickname = user.nickname;
+      item.level = stats?.level ?? 1;
+      item.totalXp = stats?.totalXp ?? 0;
+      item.currentStreak = stats?.streakDays ?? 0;
+      item.sessionStartedAt = session.startedAt;
+      item.durationSeconds = Math.floor(
+        (now.getTime() - session.startedAt.getTime()) / 1000,
+      );
+      return item;
+    });
+
     return res;
   }
 
