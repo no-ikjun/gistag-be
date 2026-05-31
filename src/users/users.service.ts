@@ -9,12 +9,7 @@ import {
 import { count, eq, sum } from 'drizzle-orm';
 import type { AppDatabase } from '../db';
 import { DRIZZLE } from '../db/database.constants';
-import {
-  userProfiles,
-  userStats,
-  users,
-  workoutRecords,
-} from '../db/schema';
+import { userProfiles, userStats, users, workoutRecords } from '../db/schema';
 import { EXERCISE_TYPES } from './constants/exercise-type.constants';
 import type { SubmitOnboardingDto } from './dto/submit-onboarding.dto';
 import type { UpdateProfileDto } from './dto/update-profile.dto';
