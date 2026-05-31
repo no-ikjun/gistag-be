@@ -6,15 +6,24 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
+import { count, eq, sum } from 'drizzle-orm';
 import type { AppDatabase } from '../db';
 import { DRIZZLE } from '../db/database.constants';
-import { userProfiles, users } from '../db/schema';
+import {
+  userProfiles,
+  userStats,
+  users,
+  workoutRecords,
+} from '../db/schema';
 import { EXERCISE_TYPES } from './constants/exercise-type.constants';
 import type { SubmitOnboardingDto } from './dto/submit-onboarding.dto';
 import type { UpdateProfileDto } from './dto/update-profile.dto';
 import { UserProfileResponseDto } from './dto/user-profile-response.dto';
+import { UserStatsResponseDto } from './dto/user-stats-response.dto';
 import { toUserProfileDto } from './users.mapper';
+
+// `WorkoutSessionsService`의 동일 상수와 일치해야 합니다.
+const XP_PER_LEVEL = 300;
 
 @Injectable()
 export class UsersService {
@@ -111,6 +120,55 @@ export class UsersService {
     }
 
     return this.getProfile(userId);
+  }
+
+  async getStats(userId: string): Promise<UserStatsResponseDto> {
+    const userRows = await this.db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    if (!userRows[0]) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    const [statsRows, aggRows] = await Promise.all([
+      this.db
+        .select()
+        .from(userStats)
+        .where(eq(userStats.userId, userId))
+        .limit(1),
+      this.db
+        .select({
+          totalWorkouts: count(),
+          totalDurationSeconds: sum(workoutRecords.durationSeconds),
+        })
+        .from(workoutRecords)
+        .where(eq(workoutRecords.userId, userId)),
+    ]);
+
+    const stats = statsRows[0];
+    const totalXp = stats?.totalXp ?? 0;
+    const level = stats?.level ?? 1;
+    const xpInCurrentLevel = totalXp % XP_PER_LEVEL;
+    const xpToNextLevel = XP_PER_LEVEL - xpInCurrentLevel;
+    const agg = aggRows[0];
+    const totalDurationSeconds = agg?.totalDurationSeconds
+      ? Number(agg.totalDurationSeconds)
+      : 0;
+
+    const res = new UserStatsResponseDto();
+    res.userId = userId;
+    res.level = level;
+    res.totalXp = totalXp;
+    res.xpInCurrentLevel = xpInCurrentLevel;
+    res.xpToNextLevel = xpToNextLevel;
+    res.xpPerLevel = XP_PER_LEVEL;
+    res.currentStreak = stats?.streakDays ?? 0;
+    res.lastWorkoutDate = stats?.lastWorkoutDate ?? null;
+    res.totalWorkouts = agg?.totalWorkouts ?? 0;
+    res.totalDurationSeconds = totalDurationSeconds;
+    return res;
   }
 
   private normalizeExerciseTypes(
