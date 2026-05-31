@@ -15,6 +15,7 @@ import { CancelWorkoutSessionDto } from './dto/cancel-workout-session.dto';
 import { FinishWorkoutSessionDto } from './dto/finish-workout-session.dto';
 import { FinishWorkoutSessionResponseDto } from './dto/finish-workout-session-response.dto';
 import { StartWorkoutSessionDto } from './dto/start-workout-session.dto';
+import { ActivePeersResponseDto } from './dto/active-peers-response.dto';
 import {
   ActiveWorkoutSessionResponseDto,
   StartWorkoutSessionResponseDto,
@@ -37,6 +38,15 @@ export class WorkoutSessionsController {
     @CurrentUserId() userId: string,
   ): Promise<ActiveWorkoutSessionResponseDto> {
     return this.workoutSessionsService.getActive(userId);
+  }
+
+  @Get('active/peers')
+  @ApiOperation({ summary: '같은 장소에서 운동 중인 다른 사용자 조회' })
+  @ApiOkResponse({ type: ActivePeersResponseDto })
+  getActivePeers(
+    @CurrentUserId() userId: string,
+  ): Promise<ActivePeersResponseDto> {
+    return this.workoutSessionsService.getActivePeers(userId);
   }
 
   @Post('start')
