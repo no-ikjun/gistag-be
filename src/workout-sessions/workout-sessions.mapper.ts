@@ -66,7 +66,7 @@ export function toWorkoutRewardDto(input: {
   return dto;
 }
 
-function toWorkoutSessionPlaceDto(place: PlaceRow): WorkoutSessionPlaceDto {
+export function toWorkoutSessionPlaceDto(place: PlaceRow): WorkoutSessionPlaceDto {
   const dto = new WorkoutSessionPlaceDto();
   dto.id = place.id;
   dto.name = place.placeName;
