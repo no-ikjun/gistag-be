@@ -136,7 +136,7 @@ export class WorkoutSessionsService {
       throw new ConflictException('Active workout session already exists');
     }
 
-    const tag = await this.findUsableTag(dto.tagCode);
+    const tag = await this.findUsableTag(dto.hardwareUid);
     if (tag.placeId !== dto.placeId) {
       throw new UnprocessableEntityException('Tag does not belong to place');
     }
@@ -337,14 +337,26 @@ export class WorkoutSessionsService {
     return res;
   }
 
-  private async findUsableTag(tagCode: string) {
-    const rows = await this.db
+  private async findUsableTag(hardwareUid: string) {
+    const trimmed = hardwareUid.trim();
+
+    const byUidRows = await this.db
       .select()
       .from(nfcTags)
-      .where(eq(nfcTags.tagCode, tagCode))
+      .where(eq(nfcTags.hardwareUid, trimmed))
       .limit(1);
 
-    const tag = rows[0];
+    let tag = byUidRows[0];
+    if (!tag) {
+      // 레거시 데이터 호환: hardwareUid가 비어 있는 태그는 tagCode로 한 번 더 조회
+      const byCodeRows = await this.db
+        .select()
+        .from(nfcTags)
+        .where(eq(nfcTags.tagCode, trimmed))
+        .limit(1);
+      tag = byCodeRows[0];
+    }
+
     if (!tag) {
       throw new NotFoundException('Tag not found');
     }
