@@ -17,13 +17,25 @@ export class TagsService {
   constructor(@Inject(DRIZZLE) private readonly db: AppDatabase) {}
 
   async resolve(dto: TagResolveDto): Promise<TagResolveResponseDto> {
-    const tagRows = await this.db
+    const hardwareUid = dto.hardwareUid.trim();
+
+    const byUidRows = await this.db
       .select()
       .from(nfcTags)
-      .where(eq(nfcTags.tagCode, dto.tagCode))
+      .where(eq(nfcTags.hardwareUid, hardwareUid))
       .limit(1);
 
-    const tag = tagRows[0];
+    let tag = byUidRows[0];
+    if (!tag) {
+      // 레거시 데이터 호환: hardwareUid로 못 찾으면 tagCode로도 한 번 시도
+      const byCodeRows = await this.db
+        .select()
+        .from(nfcTags)
+        .where(eq(nfcTags.tagCode, hardwareUid))
+        .limit(1);
+      tag = byCodeRows[0];
+    }
+
     if (!tag) {
       throw new NotFoundException('Tag not found');
     }

@@ -2,16 +2,17 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class TagResolveDto {
-  @ApiProperty({ example: 'GISTAG_TAG_DEMO_001' })
+  @ApiProperty({ example: '04A1B2C3D4E5F6' })
   @IsString()
   @IsNotEmpty()
-  tagCode!: string;
+  hardwareUid!: string;
 
   @ApiPropertyOptional({
-    example: '04:A1:B2:C3:D4:E5:F6',
-    description: '기기에서 읽을 수 있는 경우에만 전달하는 보조 하드웨어 UID',
+    nullable: true,
+    example: null,
+    description: '읽을 수 있으면 함께 전달하는 보조 NDEF payload',
   })
   @IsOptional()
   @IsString()
-  hardwareUid?: string;
+  ndefPayload?: string | null;
 }

@@ -4,7 +4,10 @@ export class ResolvedTagDto {
   @ApiProperty({ example: 1 })
   id!: number;
 
-  @ApiProperty({ example: 'GISTAG_TAG_DEMO_001' })
+  @ApiProperty({
+    example: '04A1B2C3D4E5F6',
+    description: '하드웨어 UID. 태그를 식별하는 1차 키',
+  })
   code!: string;
 
   @ApiProperty({ example: 'ACTIVE' })
@@ -12,26 +15,20 @@ export class ResolvedTagDto {
 }
 
 export class ResolvedPlaceDto {
-  @ApiProperty({ example: 1 })
+  @ApiProperty({ example: 10 })
   id!: number;
 
   @ApiProperty({ example: 'GIST 체육관' })
   name!: string;
 
-  @ApiProperty({
-    nullable: true,
-    example: '실내 운동을 기록할 수 있는 장소입니다.',
-  })
-  description!: string | null;
+  @ApiProperty({ nullable: true, example: '헬스' })
+  workoutType!: string | null;
 
-  @ApiProperty({ nullable: true, example: 'GYM' })
-  category!: string | null;
+  @ApiProperty({ nullable: true, example: 35.2131 })
+  latitude!: number | null;
 
-  @ApiProperty({
-    nullable: true,
-    example: 'https://cdn.gistag.app/places/gym.jpg',
-  })
-  imageUrl!: string | null;
+  @ApiProperty({ nullable: true, example: 126.8378 })
+  longitude!: number | null;
 }
 
 export class TagResolveResponseDto {
