@@ -47,13 +47,13 @@ export class AdminNfcTagsService {
 
       const existingByCode = existingByUid[0]
         ? null
-        : (
+        : ((
             await tx
               .select()
               .from(nfcTags)
               .where(eq(nfcTags.tagCode, hardwareUid))
               .limit(1)
-          )[0] ?? null;
+          )[0] ?? null);
 
       const existing = existingByUid[0] ?? existingByCode;
       const now = new Date();

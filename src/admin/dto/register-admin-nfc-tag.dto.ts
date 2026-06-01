@@ -44,7 +44,10 @@ export class AdminTagMetadataDto {
   @IsString({ each: true })
   technologies?: string[];
 
-  @ApiPropertyOptional({ example: 'gistag://tag/04A1B2C3D4E5F6', nullable: true })
+  @ApiPropertyOptional({
+    example: 'gistag://tag/04A1B2C3D4E5F6',
+    nullable: true,
+  })
   @IsOptional()
   @IsString()
   ndefPayload?: string | null;
