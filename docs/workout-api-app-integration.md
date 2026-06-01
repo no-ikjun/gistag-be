@@ -1,6 +1,6 @@
 # Gistag 운동/NFC API 앱 연동 가이드
 
-이번 백엔드 작업으로 NFC 태그 검증, 운동 세션 시작/복구/종료, 최근 운동 기록 조회 API가 추가되었습니다. 앱에서는 NFC 스티커에서 읽은 `tagCode`를 서버에 전달하고, 서버가 장소 검증과 운동 시간/XP/streak 계산을 담당합니다.
+이번 백엔드 작업으로 NFC 태그 검증, 운동 세션 시작/복구/종료, 최근 운동 기록 조회 API가 추가되었습니다. 앱에서는 NFC 칩에서 읽은 **`hardwareUid`** 를 서버에 전달하고, 서버가 장소 검증과 운동 시간/XP/streak 계산을 담당합니다. (이전 버전의 `tagCode` 중심 흐름은 호환을 위해 일부 운영 API에만 남아 있습니다.)
 
 ## 공통
 
@@ -23,23 +23,16 @@ Content-Type: application/json
 
 ## NFC 스티커 읽기 방식
 
-앱은 NFC 스티커의 하드웨어 UID를 주 식별자로 사용하지 않습니다. Android에서는 UID를 읽을 수 있지만 iOS 호환성과 복제 가능성 때문에 신뢰 식별자로 쓰기 어렵습니다.
-
-스티커에는 앱 전용 NDEF payload가 기록됩니다.
-
-```text
-gistag://tag/GISTAG_TAG_DEMO_001
-```
-
-앱은 payload에서 `tagCode`만 파싱해 서버로 보냅니다.
+앱은 NFC 칩의 **하드웨어 UID(`hardwareUid`)** 를 주 식별자로 사용합니다. 운영자가 `POST /admin/nfc-tags/register`로 등록할 때 같은 UID를 키로 저장하기 때문에, 앱이 읽은 UID 값을 그대로 서버에 보내면 됩니다.
 
 ```json
 {
-  "tagCode": "GISTAG_TAG_DEMO_001"
+  "hardwareUid": "04A1B2C3D4E5F6",
+  "ndefPayload": null
 }
 ```
 
-`hardwareUid`를 읽을 수 있는 경우 선택적으로 함께 보낼 수 있지만, MVP 판단 기준은 `tagCode`입니다.
+`ndefPayload`는 읽을 수 있을 때만 함께 보내는 보조 정보이며, 검증에는 사용되지 않습니다.
 
 ## 사용자 앱 Flow
 
@@ -60,18 +53,18 @@ flowchart LR
 POST /tags/resolve
 ```
 
-NFC payload에서 읽은 `tagCode`가 유효한 장소에 연결되어 있는지 확인합니다.
+NFC 칩에서 읽은 `hardwareUid`가 유효한 장소에 연결되어 있는지 확인합니다. `hardwareUid`가 1차 식별자입니다.
 
 ### Request
 
 ```json
 {
-  "tagCode": "GISTAG_TAG_DEMO_001",
-  "hardwareUid": "04:A1:B2:C3:D4:E5:F6"
+  "hardwareUid": "04A1B2C3D4E5F6",
+  "ndefPayload": null
 }
 ```
 
-`hardwareUid`는 선택값입니다.
+`ndefPayload`는 선택값입니다(읽을 수 있을 때만 함께 전달).
 
 ### Response 200
 
@@ -79,20 +72,22 @@ NFC payload에서 읽은 `tagCode`가 유효한 장소에 연결되어 있는지
 {
   "tag": {
     "id": 1,
-    "code": "GISTAG_TAG_DEMO_001",
+    "code": "04A1B2C3D4E5F6",
     "status": "ACTIVE"
   },
   "place": {
-    "id": 1,
-    "name": "제2학생회관 헬스장",
-    "description": "캠퍼스 내 헬스장",
-    "category": "gym",
-    "imageUrl": null
+    "id": 10,
+    "name": "GIST 체육관",
+    "workoutType": "헬스",
+    "latitude": 35.2131,
+    "longitude": 126.8378
   },
   "canStartWorkout": true,
   "blockedReason": null
 }
 ```
+
+`tag.code`는 `hardwareUid`와 동일한 값을 반환합니다. 운동 시작 시 그대로 `hardwareUid` 필드에 넣어 보냅니다.
 
 ### 주요 에러
 
@@ -143,14 +138,14 @@ GET /workout-sessions/active
 POST /workout-sessions/start
 ```
 
-태그 검증 화면에서 사용자가 시작 버튼을 누를 때 호출합니다. 앱이 보낸 `placeId`와 서버의 `tagCode -> placeId` 매핑이 다시 검증됩니다.
+태그 검증 화면에서 사용자가 시작 버튼을 누를 때 호출합니다. 앱이 보낸 `placeId`와 서버의 `hardwareUid -> placeId` 매핑이 다시 검증됩니다.
 
 ### Request
 
 ```json
 {
-  "tagCode": "GISTAG_TAG_DEMO_001",
-  "placeId": 1
+  "hardwareUid": "04A1B2C3D4E5F6",
+  "placeId": 10
 }
 ```
 
@@ -318,79 +313,79 @@ GET /workout-records/me/recent?limit=5
 
 ## 운영자용 NFC 관리 API
 
-아래 API는 NFC 스티커 발급/등록/관리용입니다. 현재는 JWT 인증만 적용되어 있고, 별도 admin role guard는 아직 없습니다.
+아래 API는 NFC 스티커를 운동 장소에 묶어 시연 환경을 구성할 때 사용합니다. 현재는 JWT 인증만 적용되어 있고, 별도 admin role guard는 아직 없습니다.
 
-### NFC tagCode 발급
+### 장소 + NFC 태그 동시 등록 (권장)
 
 ```http
-POST /nfc/issue
+POST /admin/nfc-tags/register
 ```
+
+운영자가 새 운동 장소를 만들고 그 장소에 NFC 스티커를 한 번에 묶습니다. `hardwareUid`가 1차 식별자입니다.
+
+#### Request
 
 ```json
 {
-  "tagId": 1,
-  "tagCode": "GISTAG_TAG_123ABC",
-  "ndefPayload": "gistag://tag/GISTAG_TAG_123ABC",
-  "ndefType": "URI"
+  "hardwareUid": "04A1B2C3D4E5F6",
+  "place": {
+    "name": "GIST 체육관",
+    "description": "시연용 운동 장소",
+    "workoutType": "헬스",
+    "latitude": 35.2131,
+    "longitude": 126.8378
+  },
+  "tagMetadata": {
+    "technologies": ["NfcA", "Ndef"],
+    "ndefPayload": null
+  }
 }
 ```
 
-운영 앱은 응답의 `ndefPayload`를 실제 NFC 스티커에 기록합니다.
+- `place`는 항상 새로 생성됩니다.
+- `tagMetadata`는 선택값입니다.
+- 동일 `hardwareUid`로 다시 호출하면 기존 태그의 `placeId`/메타데이터가 새 장소 기준으로 갱신됩니다 (RETIRED 상태는 거부).
 
-### NFC 스티커 등록
-
-```http
-POST /nfc/register
-```
+#### Response 201
 
 ```json
 {
-  "tagCode": "GISTAG_TAG_123ABC",
-  "placeId": 1,
-  "hardwareUid": "04:A1:B2:C3:D4:E5:F6",
-  "ndefPayload": "gistag://tag/GISTAG_TAG_123ABC",
-  "ndefType": "URI",
-  "techTypes": ["NFC_A", "NDEF"],
-  "isWritable": true,
-  "maxSizeBytes": 144
+  "tag": {
+    "id": 1,
+    "hardwareUid": "04A1B2C3D4E5F6",
+    "status": "ACTIVE"
+  },
+  "place": {
+    "id": 10,
+    "name": "GIST 체육관",
+    "latitude": 35.2131,
+    "longitude": 126.8378
+  }
 }
 ```
 
-`placeId`가 있으면 `ACTIVE`, 없으면 `UNASSIGNED` 상태로 저장됩니다.
+#### 주요 에러
 
-### NFC 스티커 장소 연결
+- `400 Bad Request`: 필수 필드 누락
+- `409 Retired NFC tag cannot be re-registered`: 이미 폐기된 태그
+- `401 Unauthorized`: 토큰 없음/만료
 
-```http
-PATCH /nfc/{tagId}/place
-```
+### (레거시) NFC tagCode 기반 관리 API
 
-```json
-{
-  "placeId": 1
-}
-```
+기존 `tagCode` 기반 운영 API는 호환을 위해 그대로 유지됩니다. 신규 시연 환경에서는 위 `/admin/nfc-tags/register`를 사용하세요.
 
-성공 시 태그는 `ACTIVE` 상태가 됩니다.
-
-### NFC 스티커 상태 변경
-
-```http
-PATCH /nfc/{tagId}/status
-```
-
-```json
-{
-  "status": "INACTIVE"
-}
-```
-
-허용 상태는 `UNASSIGNED`, `ACTIVE`, `INACTIVE`, `RETIRED`입니다. `ACTIVE`로 전환하려면 `placeId`가 먼저 연결되어 있어야 합니다.
+| Method | Path | 설명 |
+| ------ | ---- | ---- |
+| `POST` | `/nfc/issue` | 새 `tagCode` 발급 + UNASSIGNED 태그 생성 |
+| `POST` | `/nfc/register` | `tagCode` 기반 등록/업데이트 |
+| `PATCH` | `/nfc/{tagId}/place` | 장소 연결 변경 |
+| `PATCH` | `/nfc/{tagId}/status` | 상태 변경 (UNASSIGNED/ACTIVE/INACTIVE/RETIRED) |
 
 ## 앱 연동 체크리스트
 
-1. NFC 스캔 결과에서 `gistag://tag/<tagCode>` 형태의 NDEF payload를 파싱합니다.
-2. `POST /tags/resolve`로 장소를 검증합니다.
-3. 성공 시 장소 확인 화면을 보여주고, 시작 버튼에서 `POST /workout-sessions/start`를 호출합니다.
+1. NFC 스캔 결과에서 칩의 `hardwareUid`(또는 NDEF payload)를 읽습니다.
+2. `POST /tags/resolve`로 `hardwareUid`를 보내 장소를 검증합니다.
+3. 성공 시 장소 확인 화면을 보여주고, 시작 버튼에서 `POST /workout-sessions/start`를 호출합니다 (`hardwareUid` + `placeId`).
 4. 운동 화면에서는 로컬 타이머를 보여주되, 최종 시간은 서버 응답을 사용합니다.
 5. 앱 재시작/background 복귀 시 `GET /workout-sessions/active`로 세션을 복구합니다.
 6. 종료 버튼에서 `POST /workout-sessions/{sessionId}/finish`를 호출하고 결과 화면은 `record`와 `reward` 응답으로 구성합니다.
