@@ -21,6 +21,9 @@ export class ResolvedPlaceDto {
   @ApiProperty({ example: 'GIST 체육관' })
   name!: string;
 
+  @ApiProperty({ nullable: true, example: '되는지 테스트' })
+  description!: string | null;
+
   @ApiProperty({ nullable: true, example: '헬스' })
   workoutType!: string | null;
 
@@ -29,6 +32,12 @@ export class ResolvedPlaceDto {
 
   @ApiProperty({ nullable: true, example: 126.8378 })
   longitude!: number | null;
+
+  @ApiProperty({ nullable: true, example: '기숙사에서 5분' })
+  distanceText!: string | null;
+
+  @ApiProperty({ nullable: true, example: 60 })
+  estimatedDurationMinutes!: number | null;
 }
 
 export class TagResolveResponseDto {

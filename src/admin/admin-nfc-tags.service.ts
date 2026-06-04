@@ -24,15 +24,26 @@ export class AdminNfcTagsService {
     }
 
     const result = await this.db.transaction(async (tx) => {
+      const placeValues: typeof places.$inferInsert = {
+        placeName: dto.place.name,
+        description: dto.place.description ?? null,
+        category: dto.place.workoutType ?? null,
+        latitude: dto.place.latitude ?? null,
+        longitude: dto.place.longitude ?? null,
+        imageUrl: dto.place.imageUrl ?? null,
+        distanceText: dto.place.distanceText ?? null,
+        estimatedDurationMinutes: dto.place.estimatedDurationMinutes ?? null,
+      };
+      if (dto.place.sortOrder !== undefined) {
+        placeValues.sortOrder = dto.place.sortOrder;
+      }
+      if (dto.place.isRecommended !== undefined) {
+        placeValues.isRecommended = dto.place.isRecommended;
+      }
+
       const [createdPlace] = await tx
         .insert(places)
-        .values({
-          placeName: dto.place.name,
-          description: dto.place.description ?? null,
-          category: dto.place.workoutType ?? null,
-          latitude: dto.place.latitude ?? null,
-          longitude: dto.place.longitude ?? null,
-        })
+        .values(placeValues)
         .returning();
 
       if (!createdPlace) {
@@ -58,6 +69,8 @@ export class AdminNfcTagsService {
       const existing = existingByUid[0] ?? existingByCode;
       const now = new Date();
 
+      const meta = dto.tagMetadata;
+
       if (existing) {
         if (existing.status === 'RETIRED') {
           throw new ConflictException(
@@ -71,8 +84,12 @@ export class AdminNfcTagsService {
             placeId: createdPlace.id,
             status: 'ACTIVE',
             hardwareUid,
-            ndefPayload: dto.tagMetadata?.ndefPayload ?? existing.ndefPayload,
-            techTypes: dto.tagMetadata?.technologies ?? existing.techTypes,
+            hardwareUidHash: meta?.hardwareUidHash ?? existing.hardwareUidHash,
+            ndefPayload: meta?.ndefPayload ?? existing.ndefPayload,
+            ndefType: meta?.ndefType ?? existing.ndefType,
+            techTypes: meta?.technologies ?? existing.techTypes,
+            isWritable: meta?.isWritable ?? existing.isWritable,
+            maxSizeBytes: meta?.maxSizeBytes ?? existing.maxSizeBytes,
             registeredBy: userId,
             registeredAt: existing.registeredAt ?? now,
             activatedAt: now,
@@ -89,10 +106,14 @@ export class AdminNfcTagsService {
         .values({
           tagCode: hardwareUid,
           hardwareUid,
+          hardwareUidHash: meta?.hardwareUidHash ?? null,
           placeId: createdPlace.id,
           status: 'ACTIVE',
-          ndefPayload: dto.tagMetadata?.ndefPayload ?? null,
-          techTypes: dto.tagMetadata?.technologies ?? null,
+          ndefPayload: meta?.ndefPayload ?? null,
+          ndefType: meta?.ndefType ?? null,
+          techTypes: meta?.technologies ?? null,
+          isWritable: meta?.isWritable ?? null,
+          maxSizeBytes: meta?.maxSizeBytes ?? null,
           registeredBy: userId,
           registeredAt: now,
           activatedAt: now,

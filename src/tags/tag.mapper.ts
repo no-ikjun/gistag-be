@@ -19,8 +19,11 @@ export function toResolvedPlace(row: PlaceRow): ResolvedPlaceDto {
   const dto = new ResolvedPlaceDto();
   dto.id = row.id;
   dto.name = row.placeName;
+  dto.description = row.description;
   dto.workoutType = row.category;
   dto.latitude = row.latitude;
   dto.longitude = row.longitude;
+  dto.distanceText = row.distanceText;
+  dto.estimatedDurationMinutes = row.estimatedDurationMinutes;
   return dto;
 }
