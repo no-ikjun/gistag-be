@@ -4,12 +4,13 @@ import { IsInt, IsNotEmpty, IsString, Min } from 'class-validator';
 
 export class StartWorkoutSessionDto {
   @ApiProperty({
-    example: '04A1B2C3D4E5F6',
-    description: 'NFC 태그의 하드웨어 UID (resolve 응답의 tag.code 값)',
+    example: '5343EF15950001',
+    description:
+      'resolve 응답의 tag.code 값. NDEF tag_code 또는 UID 기반 hardware_uid 모두 허용',
   })
   @IsString()
   @IsNotEmpty()
-  hardwareUid!: string;
+  tagCode!: string;
 
   @ApiProperty({ example: 1 })
   @Type(() => Number)

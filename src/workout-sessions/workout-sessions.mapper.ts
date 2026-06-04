@@ -28,7 +28,7 @@ export function toWorkoutSessionDto(
   if (tag) {
     const startedByTag = new WorkoutSessionStartedByTagDto();
     startedByTag.id = tag.id;
-    startedByTag.code = tag.tagCode;
+    startedByTag.code = tag.hardwareUid ?? tag.tagCode;
     dto.startedByTag = startedByTag;
   }
 

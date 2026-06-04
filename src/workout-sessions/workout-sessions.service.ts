@@ -136,7 +136,7 @@ export class WorkoutSessionsService {
       throw new ConflictException('Active workout session already exists');
     }
 
-    const tag = await this.findUsableTag(dto.hardwareUid);
+    const tag = await this.findUsableTag(dto.tagCode);
     if (tag.placeId !== dto.placeId) {
       throw new UnprocessableEntityException('Tag does not belong to place');
     }
@@ -155,7 +155,7 @@ export class WorkoutSessionsService {
         .returning();
 
       const res = new StartWorkoutSessionResponseDto();
-      res.session = toWorkoutSessionDto(rows[0], place);
+      res.session = toWorkoutSessionDto(rows[0], place, tag);
       return res;
     } catch (err: unknown) {
       if (this.isUniqueViolation(err)) {
@@ -337,9 +337,10 @@ export class WorkoutSessionsService {
     return res;
   }
 
-  private async findUsableTag(hardwareUid: string) {
-    const trimmed = hardwareUid.trim();
+  private async findUsableTag(tagCode: string) {
+    const trimmed = tagCode.trim();
 
+    // UID 기반 태그를 우선 조회하고, 없으면 NDEF tag_code로 fallback
     const byUidRows = await this.db
       .select()
       .from(nfcTags)
@@ -348,7 +349,6 @@ export class WorkoutSessionsService {
 
     let tag = byUidRows[0];
     if (!tag) {
-      // 레거시 데이터 호환: hardwareUid가 비어 있는 태그는 tagCode로 한 번 더 조회
       const byCodeRows = await this.db
         .select()
         .from(nfcTags)
@@ -361,7 +361,7 @@ export class WorkoutSessionsService {
       throw new NotFoundException('Tag not found');
     }
 
-    if (tag.status !== 'ACTIVE' || tag.placeId == null) {
+    if (tag.status !== 'ACTIVE' || tag.placeId == null || tag.retiredAt) {
       throw new UnprocessableEntityException('Tag is inactive');
     }
 
